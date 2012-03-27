@@ -1,5 +1,6 @@
 #!/bin/bash
 
+PROGNAME=numaarch
 
 #sysfs
 SYSFS_CPU="/sys/devices/system/cpu"
@@ -10,20 +11,26 @@ NODE_POSSIBLE_COUNT=$(ls -1d ${SYSFS_NODE}/node[0-9]* | wc -l)
 
 mkdir -p output
 
+echo ">>>$PROGNAME: Compiling Stream Benchmark"
 cd stream
 make clean
 make
 
+echo ">>>$PROGNAME: Running Stream Benchmark on all cores"
 export OMP_NUM_THREADS=${CPU_POSSIBLE_COUNT}
 ./stream_c.exe >> ../output/streamlocal.minas
+
+echo ">>>$PROGNAME: Running Stream Benchmark on first core"
 export OMP_NUM_THREADS=1
 numactl --membind=0 --physcpubind=0 ./stream_c.exe >> ../output/streamlocal.minas
 
+echo ">>>$PROGNAME: Running Stream Benchmark on different nodes"
 #running Stream for every node on the machine
 for ((j=0;j < ${NODE_POSSIBLE_COUNT} ;j++)); do
 	core=`ls -d /sys/devices/system/node/node$j/cpu[0-9]* | head -1`
 	core=`basename $core | sed s/cpu//`
 	for ((i=0;i<${NODE_POSSIBLE_COUNT};i++)); do
+		echo ">>>$PROGNAME: Running Stream Benchmark on between nodes $i and $core"
 		numactl --membind=$i --physcpubind=$core ./stream_c.exe >> ../output/stream.minas
 	done
 done
