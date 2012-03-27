@@ -9,6 +9,7 @@ SYSFS_NODE="/sys/devices/system/node"
 CPU_POSSIBLE_COUNT=$(ls -d ${SYSFS_CPU}/cpu[0-9]* | wc -l)
 NODE_POSSIBLE_COUNT=$(ls -1d ${SYSFS_NODE}/node[0-9]* | wc -l)
 
+rm -rf output
 mkdir -p output
 
 echo ">>>$PROGNAME: Compiling Stream Benchmark"
@@ -22,7 +23,7 @@ export OMP_NUM_THREADS=${CPU_POSSIBLE_COUNT}
 
 echo ">>>$PROGNAME: Running Stream Benchmark on first core"
 export OMP_NUM_THREADS=1
-numactl --membind=0 --physcpubind=0 ./stream_c.exe >> ../output/streamlocal.minas
+numactl --membind=0 --physcpubind=0 ./stream_c.exe | tee -a ../output/streamlocal.minas
 
 echo ">>>$PROGNAME: Running Stream Benchmark on different nodes"
 #running Stream for every node on the machine
@@ -31,7 +32,7 @@ for ((j=0;j < ${NODE_POSSIBLE_COUNT} ;j++)); do
 	core=`basename $core | sed s/cpu//`
 	for ((i=0;i<${NODE_POSSIBLE_COUNT};i++)); do
 		echo ">>>$PROGNAME: Running Stream Benchmark on between nodes $i and $core"
-		numactl --membind=$i --physcpubind=$core ./stream_c.exe >> ../output/stream.minas
+		numactl --membind=$i --physcpubind=$core ./stream_c.exe |tee -a ../output/stream.minas
 	done
 done
 
