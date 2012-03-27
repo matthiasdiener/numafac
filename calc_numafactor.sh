@@ -1,5 +1,10 @@
 #!/bin/bash
 
+
+#sysfs
+SYSFS_CPU="/sys/devices/system/cpu"
+SYSFS_NODE="/sys/devices/system/node"
+
 CPU_POSSIBLE_COUNT=$(ls -d ${SYSFS_CPU}/cpu[0-9]* | wc -l)
 NODE_POSSIBLE_COUNT=$(ls -1d ${SYSFS_NODE}/node[0-9]* | wc -l)
 
