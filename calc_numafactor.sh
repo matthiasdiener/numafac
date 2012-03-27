@@ -19,7 +19,7 @@ make
 
 echo ">>>$PROGNAME: Running Stream Benchmark on all cores"
 export OMP_NUM_THREADS=${CPU_POSSIBLE_COUNT}
-./stream_c.exe >> ../output/streamlocal.minas
+./stream_c.exe |tee -a ../output/streamlocal.minas
 
 echo ">>>$PROGNAME: Running Stream Benchmark on first core"
 export OMP_NUM_THREADS=1
@@ -31,7 +31,7 @@ for ((j=0;j < ${NODE_POSSIBLE_COUNT} ;j++)); do
 	core=`ls -d /sys/devices/system/node/node$j/cpu[0-9]* | head -1`
 	core=`basename $core | sed s/cpu//`
 	for ((i=0;i<${NODE_POSSIBLE_COUNT};i++)); do
-		echo ">>>$PROGNAME: Running Stream Benchmark on between nodes $i and $core"
+		echo ">>>$PROGNAME: Running Stream Benchmark core $core to node $i"
 		numactl --membind=$i --physcpubind=$core ./stream_c.exe |tee -a ../output/stream.minas
 	done
 done
@@ -55,8 +55,8 @@ rm tfn.data tband.data
 
 
 #computing average bandwidth and nodes bandwidth
-echo -e "\n#Remote bandwidth" >> ../output/numacost.minas
-awk '{sum+=$0} END { print sum/NR}' band.data >> ../output/numacost.minas
+echo -e "\n#Remote bandwidth" |tee -a ../output/numacost.minas
+awk '{sum+=$0} END { print sum/NR}' band.data |tee -a ../output/numacost.minas
 
 columns=""
 for ((i=0;i<${NODE_POSSIBLE_COUNT};i++))
@@ -95,8 +95,99 @@ do
   done
 done
 
-echo -e "\n#NUMA factor" >> ../output/numacost.minas
-awk '{sum+=$0} END { print sum/NR}' tnumafactor.minas >> ../output/numacost.minas
+echo ">>>$PROGNAME: NUMA factor from Stream Benchmark:"
+echo -e "\n#NUMA factor" | tee -a ../output/numacost.minas
+awk '{sum+=$0} END { print sum/NR}' tnumafactor.minas | tee -a ../output/numacost.minas
 
 cat tnumafactor.minas | paste ${columns} > ../output/numafactor_stream.minas
 rm tnumafactor.minas
+
+#######################################################################################
+#######################################################################################
+#######################################################################################
+
+
+
+
+
+echo ">>>$PROGNAME: Compiling lmbench Benchmark"
+
+#Latency for read - REMOTE and LOCAL
+cd ../lmbench3
+#mkdir ./SCCS
+#touch ./SCCS/s.ChangeSet
+make build
+
+folder=`ls bin/`
+cd bin/$folder
+
+echo $folder
+
+cp lmbench.a $PATHMINAS/archTopology/latencies/
+
+
+echo ">>>$PROGNAME: Running lmbench benchmark on local node"
+./lat_mem_rd -P 1 -N 1 $LLC_SIZE $L2_SIZE &> tmp.out
+echo -e "\n#Local Latency " >> ../output/numacost.minas
+cat tmp.out | tail -2 |  awk '{print $2}' >> ../output/numacost.minas
+rm tmp.out
+
+
+echo ">>>$PROGNAME: Running lmbench benchmark on different nodes"
+####################################################################
+#running lat_mem for every node on the machine
+for ((j=0;j < ${NODE_POSSIBLE_COUNT} ;j++))
+do
+core=`ls -d /sys/devices/system/node/node$j/cpu[0-9]* | head -1`
+core=`basename $core | sed s/cpu//`
+for ((i=0;i<${NODE_POSSIBLE_COUNT};i++))
+do
+(numactl --membind=$i --physcpubind=$core ./lat_mem_rd -P 1 -N 1 $LLC_SIZE $L2_SIZE) &> tmp.out
+cat tmp.out | tail -2 | awk '{print $2}' >> tlatencies.minas 
+done
+done
+
+sed '/^$/d' < tlatencies.minas > latencies.minas
+rm tlatencies.minas tmp.out
+
+####################################################################
+#Computing NUMA factor
+counter=0
+while read n
+do
+	let i=$counter/${NODE_POSSIBLE_COUNT}
+	let j=$counter%${NODE_POSSIBLE_COUNT}
+	let counter++
+
+	var="tabela_${i}_${j}"
+	declare $var=$n
+done < latencies.minas
+rm latencies.minas
+
+ite=${NODE_POSSIBLE_COUNT}
+
+for ((i=0;i<$ite;i++))
+do
+  for ((j=0;j<$ite;j++))
+  do
+    num="tabela_${i}_${j}"
+    div="tabela_${i}_${i}"
+
+    var="fator_${i}_${j}"
+    lat="latency_${i}_${j}"
+    declare $var=`echo scale=4\;${!num} / ${!div} | bc`
+    declare $lat=`echo scale=4\;${!num} | bc`
+
+    echo ${!var} >> tnumafactor.minas
+    echo ${!lat} >> tlatency.minas
+  done
+done
+
+echo -e "\n#NUMA factor lmbench" >> ${PATHMINAS}/archTopology/output/numacost.minas
+awk '{sum+=$0} END { print sum/NR}' tnumafactor.minas >> ${PATHMINAS}/archTopology/output/numacost.minas
+
+cat tnumafactor.minas | paste ${columns} > ${PATHMINAS}/archTopology/output/numafactor_lmbench.minas
+rm tnumafactor.minas
+
+cat tlatency.minas | paste ${columns} > ${PATHMINAS}/archTopology/output/latency_lmbench.minas
+rm tlatency.minas
