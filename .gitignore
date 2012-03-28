@@ -1,3 +1,5 @@
 output/
+bin/
+*.a
 *.o
 *.exe
