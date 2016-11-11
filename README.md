@@ -11,4 +11,4 @@ Just a compiler (gcc by default).
 
     $ ./calc_numafactor.sh
 
-Results will be placed in the ```output/``` folder
+Results will be placed in the ```output/``` folder.
